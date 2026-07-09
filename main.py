@@ -1,16 +1,24 @@
 from fastapi import FastAPI
+from database import engine
+import models
+
+# Create all database tables defined in models.py
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
 
 @app.get("/")
 def read_root():
     return {"message": "TSP Optimization API is running"}
 
+
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
 
-@ app.get("/info")
+
+@app.get("/info")
 def api_info():
     return {
         "name": "TSP Optimization API",
