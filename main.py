@@ -19,6 +19,20 @@ from algorithms.city import City
 from algorithms.q_learning import QLearning
 from algorithms.p_marl import PMARL
 
+from dotenv import load_dotenv
+
+from openai_service import generate_explanation
+load_dotenv()
+
+from schemas import (
+    SolveRequest,
+    SolveResponse,
+    AlgorithmResult,
+    RunSummary,
+    RunDetail,
+    ExplainRequest,
+    ExplainResponse,
+)
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -125,3 +139,46 @@ def get_run(run_id: int, db: Session = Depends(get_db)):
     if not run:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     return run
+
+@app.post("/explain", response_model=ExplainResponse)
+def explain(request: ExplainRequest, db: Session = Depends(get_db)):
+    """
+    Generate a plain-English explanation comparing two algorithm runs.
+    Both runs must exist in the database.
+    """
+    q_run = db.query(models.AlgorithmRun).filter(models.AlgorithmRun.id == request.q_learning_run_id).first()
+    p_run = db.query(models.AlgorithmRun).filter(models.AlgorithmRun.id == request.p_marl_run_id).first()
+
+    if not q_run:
+        raise HTTPException(status_code=404, detail=f"Q-Learning run {request.q_learning_run_id} not found")
+    if not p_run:
+        raise HTTPException(status_code=404, detail=f"P-MARL run {request.p_marl_run_id} not found")
+
+    # Convert database rows back to dictionaries for the OpenAI service
+    q_result = {
+        "algorithm": q_run.algorithm,
+        "total_distance": q_run.total_distance,
+        "prize_collected": q_run.prize_collected,
+        "runtime_ms": q_run.runtime_seconds * 1000,
+        "remaining_budget": q_run.budget - q_run.total_distance,
+        "route": json.loads(q_run.route),
+    }
+    p_result = {
+        "algorithm": p_run.algorithm,
+        "total_distance": p_run.total_distance,
+        "prize_collected": p_run.prize_collected,
+        "runtime_ms": p_run.runtime_seconds * 1000,
+        "remaining_budget": p_run.budget - p_run.total_distance,
+        "route": json.loads(p_run.route),
+    }
+
+    try:
+        explanation = generate_explanation(q_result, p_result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate explanation: {str(e)}")
+
+    return ExplainResponse(
+        explanation=explanation,
+        q_learning_run_id=q_run.id,
+        p_marl_run_id=p_run.id,
+    )

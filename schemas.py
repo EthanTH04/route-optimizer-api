@@ -72,3 +72,15 @@ class RunDetail(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ExplainRequest(BaseModel):
+    """Request body for POST /explain — takes two run IDs."""
+    q_learning_run_id: int
+    p_marl_run_id: int
+
+
+class ExplainResponse(BaseModel):
+    """Response for POST /explain — the AI-generated explanation."""
+    explanation: str
+    q_learning_run_id: int
+    p_marl_run_id: int
