@@ -34,6 +34,24 @@ from schemas import (
     ExplainResponse,
 )
 
+from datetime import timedelta
+
+from fastapi.security import OAuth2PasswordRequestForm
+
+import auth
+from schemas import (
+    SolveRequest,
+    SolveResponse,
+    AlgorithmResult,
+    RunSummary,
+    RunDetail,
+    ExplainRequest,
+    ExplainResponse,
+    UserCreate,
+    UserResponse,
+    Token,
+)
+
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -54,7 +72,11 @@ def health_check():
 
 
 @app.post("/solve", response_model=SolveResponse)
-def solve(request: SolveRequest, db: Session = Depends(get_db)):
+def solve(
+    request: SolveRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
     """
     Run both Q-Learning and P-MARL on the given cities and budget.
     Stores both runs in the database and returns a comparison.
@@ -126,14 +148,21 @@ def solve(request: SolveRequest, db: Session = Depends(get_db)):
 
 
 @app.get("/runs", response_model=list[RunSummary])
-def list_runs(db: Session = Depends(get_db)):
+def list_runs(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
     """Return all stored algorithm runs, most recent first."""
     runs = db.query(models.AlgorithmRun).order_by(models.AlgorithmRun.created_at.desc()).all()
     return runs
 
 
 @app.get("/runs/{run_id}", response_model=RunDetail)
-def get_run(run_id: int, db: Session = Depends(get_db)):
+def get_run(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
     """Retrieve a specific algorithm run by ID."""
     run = db.query(models.AlgorithmRun).filter(models.AlgorithmRun.id == run_id).first()
     if not run:
@@ -141,7 +170,11 @@ def get_run(run_id: int, db: Session = Depends(get_db)):
     return run
 
 @app.post("/explain", response_model=ExplainResponse)
-def explain(request: ExplainRequest, db: Session = Depends(get_db)):
+def explain(
+    request: ExplainRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
     """
     Generate a plain-English explanation comparing two algorithm runs.
     Both runs must exist in the database.
@@ -182,3 +215,41 @@ def explain(request: ExplainRequest, db: Session = Depends(get_db)):
         q_learning_run_id=q_run.id,
         p_marl_run_id=p_run.id,
     )
+
+@app.post("/auth/register", response_model=UserResponse)
+def register(user_data: UserCreate, db: Session = Depends(get_db)):
+    """Create a new user account."""
+    existing = db.query(models.User).filter(models.User.username == user_data.username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+
+    hashed = auth.hash_password(user_data.password)
+    user = models.User(username=user_data.username, hashed_password=hashed)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.post("/auth/login", response_model=Token)
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    """Authenticate a user and return a JWT token."""
+    user = db.query(models.User).filter(models.User.username == form_data.username).first()
+    if not user or not auth.verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token = auth.create_access_token(
+        data={"sub": user.username},
+        expires_delta=timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    return Token(access_token=access_token, token_type="bearer")
+
+
+@app.get("/auth/me", response_model=UserResponse)
+def get_me(current_user: models.User = Depends(auth.get_current_user)):
+    """Get info about the currently authenticated user."""
+    return current_user

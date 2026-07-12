@@ -84,3 +84,23 @@ class ExplainResponse(BaseModel):
     explanation: str
     q_learning_run_id: int
     p_marl_run_id: int
+
+class UserCreate(BaseModel):
+    """Request body for POST /auth/register."""
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=8, max_length=100)
+
+
+class UserResponse(BaseModel):
+    """Response body for user info."""
+    id: int
+    username: str
+
+    class Config:
+        from_attributes = True
+
+
+class Token(BaseModel):
+    """JWT token response."""
+    access_token: str
+    token_type: str
