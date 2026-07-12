@@ -110,20 +110,20 @@ def solve(
     # Store both runs in the database
     q_run = models.AlgorithmRun(
         algorithm=q_result["algorithm"],
-        num_cities=q_result["num_cities"],
-        budget=q_result["budget"],
-        total_distance=q_result["total_distance"],
-        prize_collected=q_result["prize_collected"],
-        runtime_seconds=q_result["runtime_ms"] / 1000,
+        num_cities=int(q_result["num_cities"]),
+        budget=float(q_result["budget"]),
+        total_distance=float(q_result["total_distance"]),
+        prize_collected=float(q_result["prize_collected"]),
+        runtime_seconds=float(q_result["runtime_ms"]) / 1000,
         route=json.dumps(q_result["route"]),
     )
     p_run = models.AlgorithmRun(
         algorithm=p_result["algorithm"],
-        num_cities=p_result["num_cities"],
-        budget=p_result["budget"],
-        total_distance=p_result["total_distance"],
-        prize_collected=p_result["prize_collected"],
-        runtime_seconds=p_result["runtime_ms"] / 1000,
+        num_cities=int(p_result["num_cities"]),
+        budget=float(p_result["budget"]),
+        total_distance=float(p_result["total_distance"]),
+        prize_collected=float(p_result["prize_collected"]),
+        runtime_seconds=float(p_result["runtime_ms"]) / 1000,
         route=json.dumps(p_result["route"]),
     )
 
